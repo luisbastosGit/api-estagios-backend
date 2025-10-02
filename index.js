@@ -52,8 +52,11 @@ function calculateAverage(grades) {
  * Função principal para autenticar com a API do Google.
  */
 async function getAuth() {
+  // Lê as credenciais da variável de ambiente que configuramos no Render
+  const credentials = JSON.parse(process.env.GOOGLE_CREDENTIALS);
+
   const auth = new google.auth.GoogleAuth({
-    credentials: require('./credentials.json'),
+    credentials, // Usa as credenciais lidas da variável
     scopes: 'https://www.googleapis.com/auth/spreadsheets',
   });
   const client = await auth.getClient();
