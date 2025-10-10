@@ -82,7 +82,12 @@ const authenticateToken = (req, res, next) => {
 // =================================================================
 // ENDPOINTS DA API
 // =================================================================
-
+// Endpoint Raiz (Root) - para o teste de saúde do Render
+app.get('/', (req, res) => {
+  res.json({
+    message: "API do Sistema de Estágios está online!",
+  });
+});
 // Endpoint de Login
 app.post('/login', async (req, res) => {
     // ... (código do login, sem alterações) ...
