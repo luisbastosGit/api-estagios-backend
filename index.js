@@ -6,7 +6,7 @@ const jwt = require('jsonwebtoken');
 
 // 2. Configurações da API
 const app = express();
-const PORT = 3000;
+const PORT = process.env.PORT || 3000;
 const SPREADSHEET_ID = '105-AqvOHRe-CiB4oODYL26raXLOVBfB0jI7Z3Pm_viM';
 const JWT_SECRET = 'seu-segredo-super-secreto-pode-ser-qualquer-coisa';
 
