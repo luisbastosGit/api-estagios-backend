@@ -11,9 +11,7 @@ const SPREADSHEET_ID = '105-AqvOHRe-CiB4oODYL26raXLOVBfB0jI7Z3Pm_viM';
 const JWT_SECRET = 'seu-segredo-super-secreto-pode-ser-qualquer-coisa';
 
 // Configuração do CORS para permitir acesso do seu site no GitHub
-app.use(cors({
-  origin: 'https://luisbastosgit.github.io' 
-}));
+app.use(cors());
 
 // Middleware para a API entender requisições com corpo em JSON
 app.use(express.json());
