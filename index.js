@@ -10,16 +10,16 @@ const PORT = process.env.PORT || 3000;
 const SPREADSHEET_ID = '105-AqvOHRe-CiB4oODYL26raXLOVBfB0jI7Z3Pm_viM';
 const JWT_SECRET = 'seu-segredo-super-secreto-pode-ser-qualquer-coisa';
 
-// Lista de sites (origens) que podem aceder a esta API
+// ATENÇÃO: Adicionamos o URL do seu outro site aqui
 const allowedOrigins = [
-  'https://luisbastosgit.github.io',
+  'https://luisbastosgit.github.io/consulta_TceIFC',
+  'https://luisbastosgit.github.io/termos-estagio-ifc' 
 ];
 
 // Configuração final do CORS
 app.use(cors({
   origin: function (origin, callback) {
-    if (!origin) return callback(null, true);
-    if (allowedOrigins.some(allowedOrigin => origin.startsWith(allowedOrigin))) {
+    if (!origin || allowedOrigins.indexOf(origin) !== -1) {
       callback(null, true);
     } else {
       callback(new Error('A política de CORS para este site não permite o acesso.'));
@@ -87,6 +87,27 @@ app.get('/', (req, res) => {
   res.json({ message: "API do Sistema de Estágios está online!" });
 });
 
+// Endpoint público para o formulário do aluno buscar os nomes dos orientadores
+app.get('/orientadores', async (req, res) => {
+    console.log('A fornecer lista de orientadores...');
+    try {
+        const { googleSheets } = await getAuth();
+        const orientadoresSheet = await googleSheets.spreadsheets.values.get({
+            spreadsheetId: SPREADSHEET_ID,
+            range: '_USUARIOS!A:A', // Lê apenas a coluna A (NOME)
+        });
+        
+        // Remove o cabeçalho ("NOME") e transforma o array de arrays em um array simples
+        const orientadoresList = orientadoresSheet.data.values.slice(1).flat().filter(Boolean).sort();
+        
+        res.json({ success: true, data: orientadoresList });
+    } catch (error) {
+        console.error('ERRO AO FORNECER LISTA DE ORIENTADORES:', error);
+        res.status(500).json({ success: false, message: 'Ocorreu um erro no servidor.' });
+    }
+});
+
+
 app.post('/login', async (req, res) => {
   console.log('Recebida requisição de login...');
   try {
@@ -129,28 +150,6 @@ app.get('/filter-options', async (req, res) => {
   console.log('A obter opções de filtro...');
   try {
     const { googleSheets } = await getAuth();
-
-    // 1. Obter a lista de nomes de orientadores corretos
-    const correctOrientadoresSheet = await googleSheets.spreadsheets.values.get({
-        spreadsheetId: SPREADSHEET_ID,
-        range: '_USUARIOS!A:A',
-    });
-    const correctOrientadoresList = correctOrientadoresSheet.data.values.slice(1).flat();
-
-    const findCorrectName = (name) => {
-        if (!name) return name;
-        const normalizedName = name.trim().toLowerCase();
-        for (const correctName of correctOrientadoresList) {
-            if (!correctName) continue;
-            const normalizedCorrectName = correctName.trim().toLowerCase();
-            if (normalizedCorrectName.includes(normalizedName)) {
-                return correctName;
-            }
-        }
-        return name.trim();
-    };
-
-    // 2. Obter todos os dados dos alunos
     const sheetData = await googleSheets.spreadsheets.values.get({
       spreadsheetId: SPREADSHEET_ID,
       range: 'Página1!A:Z',
@@ -167,26 +166,16 @@ app.get('/filter-options', async (req, res) => {
       turma: headers.indexOf('turma-fase'),
     };
 
-    const getUniqueValues = (index, applyCorrection = false) => {
+    const getUniqueValues = (index) => {
       if (index === -1) return [];
-      const values = rows.map(row => {
-        let value = row[index];
-        if (value) {
-            value = value.trim();
-            // Aplica a correção de nome apenas para a coluna de orientadores
-            if (applyCorrection) {
-                value = findCorrectName(value);
-            }
-        }
-        return value;
-      }).filter(Boolean);
+      const values = rows.map(row => row[index] ? row[index].trim() : null).filter(Boolean);
       return [...new Set(values)].sort();
     };
 
     const options = {
       status: getUniqueValues(colIndexes.status),
       cursos: getUniqueValues(colIndexes.curso),
-      orientadores: getUniqueValues(colIndexes.orientador, true), // Passa `true` para aplicar a correção
+      orientadores: getUniqueValues(colIndexes.orientador),
       turmas: getUniqueValues(colIndexes.turma),
     };
 
@@ -204,25 +193,6 @@ app.post('/student-data', authenticateToken, async (req, res) => {
   try {
     const filters = req.body;
     const { googleSheets } = await getAuth();
-
-    const correctOrientadoresSheet = await googleSheets.spreadsheets.values.get({
-      spreadsheetId: SPREADSHEET_ID,
-      range: '_USUARIOS!A:A',
-    });
-    const correctOrientadoresList = correctOrientadoresSheet.data.values.slice(1).flat();
-
-    const findCorrectName = (name) => {
-        if (!name) return name;
-        const normalizedName = name.trim().toLowerCase();
-        for (const correctName of correctOrientadoresList) {
-            if (!correctName) continue;
-            const normalizedCorrectName = correctName.trim().toLowerCase();
-            if (normalizedCorrectName.includes(normalizedName)) {
-                return correctName;
-            }
-        }
-        return name;
-    };
     
     const studentSheet = await googleSheets.spreadsheets.values.get({
         spreadsheetId: SPREADSHEET_ID,
@@ -237,9 +207,6 @@ app.post('/student-data', authenticateToken, async (req, res) => {
         headers.forEach((header, index) => {
             rowObj[header] = row[index];
         });
-        if (rowObj['nome-orientador']) {
-            rowObj['nome-orientador'] = findCorrectName(rowObj['nome-orientador']);
-        }
         return rowObj;
     });
 
@@ -423,3 +390,4 @@ app.post('/complete-registration', async (req, res) => {
 app.listen(PORT, () => {
   console.log(`🚀 Servidor a rodar na porta ${PORT}`);
 });
+
