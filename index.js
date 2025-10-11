@@ -19,6 +19,7 @@ const allowedOrigins = [
 app.use(cors({
   origin: function (origin, callback) {
     if (!origin) return callback(null, true);
+    // Permite subdomínios e caminhos diferentes dentro do mesmo site base
     if (allowedOrigins.some(allowedOrigin => origin.startsWith(allowedOrigin))) {
       callback(null, true);
     } else {
@@ -147,7 +148,6 @@ app.get('/filter-options', async (req, res) => {
 
     const getUniqueValues = (index) => {
       if (index === -1) return [];
-      // CORREÇÃO APLICADA AQUI: .trim() remove espaços em branco
       const values = rows.map(row => row[index] ? row[index].trim() : null).filter(Boolean);
       return [...new Set(values)].sort();
     };
@@ -173,6 +173,25 @@ app.post('/student-data', authenticateToken, async (req, res) => {
   try {
     const filters = req.body;
     const { googleSheets } = await getAuth();
+
+    const correctOrientadoresSheet = await googleSheets.spreadsheets.values.get({
+      spreadsheetId: SPREADSHEET_ID,
+      range: '_USUARIOS!A:A',
+    });
+    const correctOrientadoresList = correctOrientadoresSheet.data.values.slice(1).flat();
+
+    const findCorrectName = (name) => {
+        if (!name) return name;
+        const normalizedName = name.trim().toLowerCase();
+        for (const correctName of correctOrientadoresList) {
+            if (!correctName) continue;
+            const normalizedCorrectName = correctName.trim().toLowerCase();
+            if (normalizedCorrectName.includes(normalizedName)) {
+                return correctName;
+            }
+        }
+        return name;
+    };
     
     const studentSheet = await googleSheets.spreadsheets.values.get({
         spreadsheetId: SPREADSHEET_ID,
@@ -187,6 +206,9 @@ app.post('/student-data', authenticateToken, async (req, res) => {
         headers.forEach((header, index) => {
             rowObj[header] = row[index];
         });
+        if (rowObj['nome-orientador']) {
+            rowObj['nome-orientador'] = findCorrectName(rowObj['nome-orientador']);
+        }
         return rowObj;
     });
 
