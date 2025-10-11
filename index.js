@@ -10,9 +10,6 @@ const PORT = process.env.PORT || 3000;
 const SPREADSHEET_ID = '105-AqvOHRe-CiB4oODYL26raXLOVBfB0jI7Z3Pm_viM';
 const JWT_SECRET = 'seu-segredo-super-secreto-pode-ser-qualquer-coisa';
 
-// ATENÇÃO: A correção final está aqui.
-// Esta configuração permite que QUALQUER site que comece com "https://luisbastosgit.github.io"
-// possa comunicar com a sua API. Isto inclui AMBOS os seus projetos.
 const corsOptions = {
   origin: 'https://luisbastosgit.github.io'
 };
@@ -93,6 +90,43 @@ app.get('/orientadores', async (req, res) => {
     } catch (error) {
         console.error('ERRO AO FORNECER LISTA DE ORIENTADORES:', error);
         res.status(500).json({ success: false, message: 'Ocorreu um erro no servidor.' });
+    }
+});
+
+app.post('/add-student', async (req, res) => {
+    console.log('A receber dados do formulário do aluno...');
+    try {
+        const studentData = req.body;
+
+        if (!studentData || !studentData.idRegistro || !studentData['nome-completo']) {
+            return res.status(400).json({ success: false, message: "Dados do aluno incompletos." });
+        }
+
+        const { googleSheets } = await getAuth();
+
+        const headerResponse = await googleSheets.spreadsheets.values.get({
+            spreadsheetId: SPREADSHEET_ID,
+            range: 'Página1!1:1',
+        });
+        const headers = headerResponse.data.values[0];
+
+        const newRow = headers.map(header => studentData[header] || '');
+
+        await googleSheets.spreadsheets.values.append({
+            spreadsheetId: SPREADSHEET_ID,
+            range: 'Página1!A:A',
+            valueInputOption: 'USER_ENTERED',
+            resource: {
+                values: [newRow],
+            },
+        });
+
+        console.log(`Novo aluno adicionado com sucesso: ${studentData['nome-completo']}`);
+        res.json({ success: true, message: "Dados enviados com sucesso! A empresa e a coordenação serão notificadas." });
+
+    } catch (error) {
+        console.error('ERRO AO ADICIONAR ALUNO:', error);
+        res.status(500).json({ success: false, message: 'Ocorreu um erro no servidor ao processar o seu registo.' });
     }
 });
 
@@ -379,5 +413,4 @@ app.post('/complete-registration', async (req, res) => {
 app.listen(PORT, () => {
   console.log(`🚀 Servidor a rodar na porta ${PORT}`);
 });
-
 
