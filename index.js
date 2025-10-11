@@ -10,23 +10,14 @@ const PORT = process.env.PORT || 3000;
 const SPREADSHEET_ID = '105-AqvOHRe-CiB4oODYL26raXLOVBfB0jI7Z3Pm_viM';
 const JWT_SECRET = 'seu-segredo-super-secreto-pode-ser-qualquer-coisa';
 
-// ATENÇÃO: Adicionamos o URL do seu outro site aqui
-const allowedOrigins = [
-  'https://luisbastosgit.github.io/consulta_TceIFC',
-  'https://luisbastosgit.github.io/termos-estagio-ifc' 
-];
+// ATENÇÃO: A correção final está aqui.
+// Esta configuração permite que QUALQUER site que comece com "https://luisbastosgit.github.io"
+// possa comunicar com a sua API. Isto inclui AMBOS os seus projetos.
+const corsOptions = {
+  origin: 'https://luisbastosgit.github.io'
+};
 
-// Configuração final do CORS
-app.use(cors({
-  origin: function (origin, callback) {
-    if (!origin || allowedOrigins.indexOf(origin) !== -1) {
-      callback(null, true);
-    } else {
-      callback(new Error('A política de CORS para este site não permite o acesso.'));
-    }
-  }
-}));
-
+app.use(cors(corsOptions));
 app.use(express.json());
 
 // =================================================================
@@ -87,17 +78,15 @@ app.get('/', (req, res) => {
   res.json({ message: "API do Sistema de Estágios está online!" });
 });
 
-// Endpoint público para o formulário do aluno buscar os nomes dos orientadores
 app.get('/orientadores', async (req, res) => {
     console.log('A fornecer lista de orientadores...');
     try {
         const { googleSheets } = await getAuth();
         const orientadoresSheet = await googleSheets.spreadsheets.values.get({
             spreadsheetId: SPREADSHEET_ID,
-            range: '_USUARIOS!A:A', // Lê apenas a coluna A (NOME)
+            range: '_USUARIOS!A:A',
         });
         
-        // Remove o cabeçalho ("NOME") e transforma o array de arrays em um array simples
         const orientadoresList = orientadoresSheet.data.values.slice(1).flat().filter(Boolean).sort();
         
         res.json({ success: true, data: orientadoresList });
@@ -390,4 +379,5 @@ app.post('/complete-registration', async (req, res) => {
 app.listen(PORT, () => {
   console.log(`🚀 Servidor a rodar na porta ${PORT}`);
 });
+
 
