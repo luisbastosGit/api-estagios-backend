@@ -99,54 +99,54 @@ app.post('/login', async (req, res) => {
 
     if (userFound) {
       const accessToken = jwt.sign(userFound, JWT_SECRET, { expiresIn: '6h' });
-      res.json({ success: true, message: 'Login bem-sucedido!', user: userFound, token: accessToken });
+      res.json({ success: true, user: userFound, token: accessToken });
     } else {
       res.status(401).json({ success: false, message: 'Email ou senha inválidos.' });
     }
+
   } catch (error) {
     console.error('ERRO NO ENDPOINT DE LOGIN:', error);
     res.status(500).json({ success: false, message: 'Ocorreu um erro no servidor.' });
   }
 });
 
-app.get('/filter-options', authenticateToken, async (req, res) => {
-    console.log('Buscando opções para os filtros...');
+app.get('/filter-options', async (req, res) => {
+    console.log('Buscando opções de filtro...');
     try {
         const { googleSheets } = await getAuth();
-        const sheetData = await googleSheets.spreadsheets.values.get({
+        const sheet = await googleSheets.spreadsheets.values.get({
             spreadsheetId: SPREADSHEET_ID,
-            range: 'Página1!A:Z', // Otimizado para ler apenas colunas necessárias
+            range: 'Página1!A:AZ',
         });
 
-        const rows = sheetData.data.values || [];
-        const headers = rows.shift() || [];
+        const rows = sheet.data.values || [];
+        const headers = rows.shift();
+        const statusIndex = headers.indexOf('statusPreenchimento');
+        const cursoIndex = headers.indexOf('curso');
+        const orientadorIndex = headers.indexOf('nome-orientador');
+        const turmaIndex = headers.indexOf('turma-fase');
+        const matriculaIndex = headers.indexOf('matricula');
 
-        const getUniqueValues = (colName) => {
-            const index = headers.indexOf(colName);
+        const uniqueValues = (index) => {
             if (index === -1) return [];
-            return [...new Set(rows.map(row => row[index]).filter(Boolean))].sort();
-        };
-
-        const getAnosFromMatricula = () => {
-            const index = headers.indexOf('matricula');
-            if (index === -1) return [];
-            const anos = new Set(rows.map(row => row[index] && row[index].substring(0, 4)).filter(Boolean));
-            return [...anos].sort((a, b) => b - a); // Ordena do mais novo para o mais antigo
+            return [...new Set(rows.map(row => row[index]).filter(Boolean))];
         };
         
+        const years = [...new Set(rows.map(row => row[matriculaIndex] ? row[matriculaIndex].substring(0, 4) : null).filter(Boolean))];
+
         res.json({
             success: true,
             data: {
-                status: getUniqueValues('statusPreenchimento'),
-                cursos: getUniqueValues('curso'),
-                orientadores: getUniqueValues('nome-orientador'),
-                turmas: getUniqueValues('turma-fase'),
-                anos: getAnosFromMatricula(),
+                status: uniqueValues(statusIndex).sort(),
+                cursos: uniqueValues(cursoIndex).sort(),
+                orientadores: uniqueValues(orientadorIndex).sort(),
+                turmas: uniqueValues(turmaIndex).sort(),
+                anos: years.sort((a, b) => b - a),
             }
         });
     } catch (error) {
         console.error('ERRO AO BUSCAR OPÇÕES DE FILTRO:', error);
-        res.status(500).json({ success: false, message: 'Ocorreu um erro no servidor ao carregar os filtros.' });
+        res.status(500).json({ success: false, message: 'Ocorreu um erro no servidor.' });
     }
 });
 
@@ -163,6 +163,9 @@ app.post('/student-data', authenticateToken, async (req, res) => {
 
     const rows = studentSheet.data.values || [];
     const headers = rows.shift();
+    const matriculaIndex = headers.indexOf('matricula');
+    const cpfIndex = headers.indexOf('cpf');
+    
     let data = rows.map(row => {
         const rowObj = {};
         headers.forEach((header, index) => {
@@ -171,27 +174,15 @@ app.post('/student-data', authenticateToken, async (req, res) => {
         return rowObj;
     });
 
-    // Aplica os filtros
-    let filteredData = data.filter(row => {
-        const statusMatch = !filters.status || row.statusPreenchimento === filters.status;
-        const cursoMatch = !filters.curso || row.curso === filters.curso;
-        const orientadorMatch = !filters.orientador || row['nome-orientador'] === filters.orientador;
-        const turmaMatch = !filters.turma || row['turma-fase'] === filters.turma;
-        const nomeMatch = !filters.nome || (row['nome-completo'] && row['nome-completo'].toLowerCase().includes(filters.nome.toLowerCase()));
-        
-        // FILTRO ANO CORRIGIDO
-        const anoMatch = !filters.ano || (row.matricula && row.matricula.startsWith(filters.ano));
-        
-        // FILTRO CPF CORRIGIDO
-        const cpfOnlyNumbers = filters.cpf ? filters.cpf.replace(/\D/g, '') : '';
-        const rowCpfOnlyNumbers = row.cpf ? row.cpf.replace(/\D/g, '') : '';
-        const cpfMatch = !cpfOnlyNumbers || (rowCpfOnlyNumbers && rowCpfOnlyNumbers.includes(cpfOnlyNumbers));
-
-        return statusMatch && cursoMatch && orientadorMatch && turmaMatch && nomeMatch && anoMatch && cpfMatch;
-    });
-
-    console.log(`Encontrados ${filteredData.length} registros.`);
-    res.json({ success: true, data: filteredData });
+    if (filters.status) data = data.filter(row => row.statusPreenchimento === filters.status);
+    if (filters.curso) data = data.filter(row => row.curso === filters.curso);
+    if (filters.orientador) data = data.filter(row => row['nome-orientador'] === filters.orientador);
+    if (filters.turma) data = data.filter(row => row['turma-fase'] === filters.turma);
+    if (filters.nome) data = data.filter(row => row['nome-completo'] && row['nome-completo'].toLowerCase().includes(filters.nome.toLowerCase()));
+    if (filters.ano) data = data.filter(row => row.matricula && row.matricula.startsWith(filters.ano));
+    if (filters.cpf) data = data.filter(row => row.cpf && row.cpf.replace(/\D/g, '').includes(filters.cpf.replace(/\D/g, '')));
+    
+    res.json({ success: true, data: data });
 
   } catch (error) {
       console.error('ERRO AO BUSCAR DADOS DOS ALUNOS:', error);
@@ -200,7 +191,6 @@ app.post('/student-data', authenticateToken, async (req, res) => {
 });
 
 app.post('/update-grades', authenticateToken, async (req, res) => {
-  // ... (código de atualização de notas, sem alterações) ...
   console.log(`Usuário '${req.user.nome}' está tentando atualizar notas...`);
   try {
     const { idRegistro, notaSupervisor, notaRelatorio, notaDefesa, observacoes } = req.body;
@@ -269,14 +259,92 @@ app.post('/update-grades', authenticateToken, async (req, res) => {
             ]
         }
     });
-
-    console.log(`Notas do registro ${idRegistro} atualizadas com sucesso.`);
+    
     res.json({ success: true, message: "Notas salvas com sucesso!" });
 
   } catch (error) {
     console.error('ERRO AO ATUALIZAR NOTAS:', error);
     res.status(500).json({ success: false, message: 'Ocorreu um erro no servidor ao salvar as notas.' });
   }
+});
+
+// NOVO ENDPOINT: Completar cadastro da empresa
+app.post('/complete-registration', async (req, res) => {
+    console.log('Recebida requisição para completar cadastro...');
+    try {
+        const formData = req.body;
+        const { idRegistro } = formData;
+        
+        if (!idRegistro) {
+            return res.status(400).json({ success: false, message: 'ID de registro não fornecido.' });
+        }
+
+        const { googleSheets } = await getAuth();
+        const sheet = await googleSheets.spreadsheets.values.get({
+            spreadsheetId: SPREADSHEET_ID,
+            range: 'Página1',
+        });
+
+        const rows = sheet.data.values || [];
+        const headers = rows[0];
+        const idRegistroColIndex = headers.indexOf('idRegistro');
+
+        let targetRowIndex = -1;
+        for(let i = 1; i < rows.length; i++) {
+            if(rows[i][idRegistroColIndex] && rows[i][idRegistroColIndex].trim() === idRegistro.trim()) {
+                targetRowIndex = i;
+                break;
+            }
+        }
+
+        if (targetRowIndex === -1) {
+            return res.status(404).json({ success: false, message: "Registro de estágio não encontrado." });
+        }
+
+        const rowNumber = targetRowIndex + 1;
+        const updateData = [];
+        
+        // Mapeia os dados do formulário para as colunas da planilha
+        for (const key in formData) {
+            if (key === 'idRegistro') continue; // Não atualiza o próprio ID
+            
+            const colIndex = headers.indexOf(key);
+            if (colIndex !== -1) {
+                const colLetter = columnIndexToLetter(colIndex);
+                updateData.push({
+                    range: `Página1!${colLetter}${rowNumber}`,
+                    values: [[formData[key]]]
+                });
+            }
+        }
+
+        // Adiciona a atualização do status
+        const statusColIndex = headers.indexOf('statusPreenchimento');
+        if (statusColIndex !== -1) {
+            const statusColLetter = columnIndexToLetter(statusColIndex);
+            updateData.push({
+                range: `Página1!${statusColLetter}${rowNumber}`,
+                values: [['Concluído']]
+            });
+        }
+        
+        if (updateData.length > 0) {
+            await googleSheets.spreadsheets.values.batchUpdate({
+                spreadsheetId: SPREADSHEET_ID,
+                resource: {
+                    valueInputOption: 'USER_ENTERED',
+                    data: updateData
+                }
+            });
+        }
+
+        console.log(`Cadastro do registro ${idRegistro} completado com sucesso.`);
+        res.json({ success: true, message: 'Cadastro completado com sucesso! Obrigado.' });
+
+    } catch (error) {
+        console.error('ERRO AO COMPLETAR CADASTRO:', error);
+        res.status(500).json({ success: false, message: 'Ocorreu um erro no servidor.' });
+    }
 });
 
 
