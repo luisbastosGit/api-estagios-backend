@@ -19,7 +19,6 @@ const allowedOrigins = [
 app.use(cors({
   origin: function (origin, callback) {
     if (!origin) return callback(null, true);
-    // Permite subdomínios e caminhos diferentes dentro do mesmo site base
     if (allowedOrigins.some(allowedOrigin => origin.startsWith(allowedOrigin))) {
       callback(null, true);
     } else {
@@ -130,6 +129,28 @@ app.get('/filter-options', async (req, res) => {
   console.log('A obter opções de filtro...');
   try {
     const { googleSheets } = await getAuth();
+
+    // 1. Obter a lista de nomes de orientadores corretos
+    const correctOrientadoresSheet = await googleSheets.spreadsheets.values.get({
+        spreadsheetId: SPREADSHEET_ID,
+        range: '_USUARIOS!A:A',
+    });
+    const correctOrientadoresList = correctOrientadoresSheet.data.values.slice(1).flat();
+
+    const findCorrectName = (name) => {
+        if (!name) return name;
+        const normalizedName = name.trim().toLowerCase();
+        for (const correctName of correctOrientadoresList) {
+            if (!correctName) continue;
+            const normalizedCorrectName = correctName.trim().toLowerCase();
+            if (normalizedCorrectName.includes(normalizedName)) {
+                return correctName;
+            }
+        }
+        return name.trim();
+    };
+
+    // 2. Obter todos os dados dos alunos
     const sheetData = await googleSheets.spreadsheets.values.get({
       spreadsheetId: SPREADSHEET_ID,
       range: 'Página1!A:Z',
@@ -146,16 +167,26 @@ app.get('/filter-options', async (req, res) => {
       turma: headers.indexOf('turma-fase'),
     };
 
-    const getUniqueValues = (index) => {
+    const getUniqueValues = (index, applyCorrection = false) => {
       if (index === -1) return [];
-      const values = rows.map(row => row[index] ? row[index].trim() : null).filter(Boolean);
+      const values = rows.map(row => {
+        let value = row[index];
+        if (value) {
+            value = value.trim();
+            // Aplica a correção de nome apenas para a coluna de orientadores
+            if (applyCorrection) {
+                value = findCorrectName(value);
+            }
+        }
+        return value;
+      }).filter(Boolean);
       return [...new Set(values)].sort();
     };
 
     const options = {
       status: getUniqueValues(colIndexes.status),
       cursos: getUniqueValues(colIndexes.curso),
-      orientadores: getUniqueValues(colIndexes.orientador),
+      orientadores: getUniqueValues(colIndexes.orientador, true), // Passa `true` para aplicar a correção
       turmas: getUniqueValues(colIndexes.turma),
     };
 
@@ -392,4 +423,3 @@ app.post('/complete-registration', async (req, res) => {
 app.listen(PORT, () => {
   console.log(`🚀 Servidor a rodar na porta ${PORT}`);
 });
-
