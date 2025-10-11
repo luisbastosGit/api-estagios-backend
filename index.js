@@ -131,7 +131,7 @@ app.get('/filter-options', async (req, res) => {
     const { googleSheets } = await getAuth();
     const sheetData = await googleSheets.spreadsheets.values.get({
       spreadsheetId: SPREADSHEET_ID,
-      range: 'Página1!A:Z', // Otimizado para ler apenas colunas relevantes
+      range: 'Página1!A:Z',
     });
 
     const rows = sheetData.data.values || [];
@@ -147,7 +147,8 @@ app.get('/filter-options', async (req, res) => {
 
     const getUniqueValues = (index) => {
       if (index === -1) return [];
-      const values = rows.map(row => row[index]).filter(Boolean);
+      // CORREÇÃO APLICADA AQUI: .trim() remove espaços em branco
+      const values = rows.map(row => row[index] ? row[index].trim() : null).filter(Boolean);
       return [...new Set(values)].sort();
     };
 
@@ -325,7 +326,6 @@ app.post('/complete-registration', async (req, res) => {
       const rowNumber = targetRowIndex + 1;
       const updates = [];
       
-      // Mapeia os dados recebidos para as colunas corretas
       for (const [key, value] of Object.entries(companyData)) {
           const colIndex = headers.indexOf(key);
           if (colIndex !== -1) {
@@ -337,7 +337,6 @@ app.post('/complete-registration', async (req, res) => {
           }
       }
 
-      // Adiciona a atualização do status
       const statusColIndex = headers.indexOf('statusPreenchimento');
       if (statusColIndex !== -1) {
           const statusColLetter = columnIndexToLetter(statusColIndex);
@@ -371,3 +370,4 @@ app.post('/complete-registration', async (req, res) => {
 app.listen(PORT, () => {
   console.log(`🚀 Servidor a rodar na porta ${PORT}`);
 });
+
