@@ -10,11 +10,32 @@ const PORT = process.env.PORT || 3000;
 const SPREADSHEET_ID = '105-AqvOHRe-CiB4oODYL26raXLOVBfB0jI7Z3Pm_viM';
 const JWT_SECRET = 'seu-segredo-super-secreto-pode-ser-qualquer-coisa';
 
-app.use(cors());
+// Lista de sites (origens) que podem aceder a esta API
+const allowedOrigins = [
+  'https://luisbastosgit.github.io', // A URL base dos seus sites
+];
+
+// Configuração final do CORS
+app.use(cors({
+  origin: function (origin, callback) {
+    // Permite pedidos sem origem (como apps mobile ou Postman/Thunder Client)
+    if (!origin) return callback(null, true);
+    
+    // Verifica se a origem do pedido está na nossa lista de permissões
+    // Usamos startsWith para permitir '.../consulta_TceIFC' e '.../termos-estagio-ifc'
+    if (allowedOrigins.some(allowedOrigin => origin.startsWith(allowedOrigin))) {
+      callback(null, true);
+    } else {
+      callback(new Error('A política de CORS para este site não permite o acesso.'));
+    }
+  }
+}));
+
 app.use(express.json());
 
 // =================================================================
-// FUNÇÕES AUXILIARES
+// FUNÇÕES AUXILIARES E DE AUTENTICAÇÃO...
+// (O resto do código permanece o mesmo)
 // =================================================================
 
 function columnIndexToLetter(index) {
@@ -51,9 +72,6 @@ async function getAuth() {
   return { googleSheets };
 }
 
-// =================================================================
-// MIDDLEWARE DE SEGURANÇA
-// =================================================================
 const authenticateToken = (req, res, next) => {
   const authHeader = req.headers['authorization'];
   const token = authHeader && authHeader.split(' ')[1];
@@ -163,8 +181,6 @@ app.post('/student-data', authenticateToken, async (req, res) => {
 
     const rows = studentSheet.data.values || [];
     const headers = rows.shift();
-    const matriculaIndex = headers.indexOf('matricula');
-    const cpfIndex = headers.indexOf('cpf');
     
     let data = rows.map(row => {
         const rowObj = {};
@@ -268,7 +284,6 @@ app.post('/update-grades', authenticateToken, async (req, res) => {
   }
 });
 
-// NOVO ENDPOINT: Completar cadastro da empresa
 app.post('/complete-registration', async (req, res) => {
     console.log('Recebida requisição para completar cadastro...');
     try {
@@ -304,9 +319,8 @@ app.post('/complete-registration', async (req, res) => {
         const rowNumber = targetRowIndex + 1;
         const updateData = [];
         
-        // Mapeia os dados do formulário para as colunas da planilha
         for (const key in formData) {
-            if (key === 'idRegistro') continue; // Não atualiza o próprio ID
+            if (key === 'idRegistro') continue;
             
             const colIndex = headers.indexOf(key);
             if (colIndex !== -1) {
@@ -318,7 +332,6 @@ app.post('/complete-registration', async (req, res) => {
             }
         }
 
-        // Adiciona a atualização do status
         const statusColIndex = headers.indexOf('statusPreenchimento');
         if (statusColIndex !== -1) {
             const statusColLetter = columnIndexToLetter(statusColIndex);
@@ -338,7 +351,6 @@ app.post('/complete-registration', async (req, res) => {
             });
         }
 
-        console.log(`Cadastro do registro ${idRegistro} completado com sucesso.`);
         res.json({ success: true, message: 'Cadastro completado com sucesso! Obrigado.' });
 
     } catch (error) {
@@ -346,7 +358,6 @@ app.post('/complete-registration', async (req, res) => {
         res.status(500).json({ success: false, message: 'Ocorreu um erro no servidor.' });
     }
 });
-
 
 // Inicia o servidor da API
 app.listen(PORT, () => {
