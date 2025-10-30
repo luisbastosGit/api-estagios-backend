@@ -224,6 +224,7 @@ app.post('/student-data', authenticateToken, async (req, res) => {
 
     const rows = studentSheet.data.values || [];
     const headers = rows.shift();
+    console.log('CABEÇALHOS REAIS DA PLANILHA:', headers);
     
     let allData = rows.map(row => {
         const rowObj = {};
@@ -232,6 +233,10 @@ app.post('/student-data', authenticateToken, async (req, res) => {
         });
         return rowObj;
     });
+    console.log('FILTRO DE EMPRESA RECEBIDO:', filters.empresa);
+    if (allData.length > 0) {
+        console.log('VALOR DA COLUNA NA 1ª LINHA:', allData[0]['nome-concedente']);
+    }
 
     let filteredData = allData;
     if (filters.status) filteredData = filteredData.filter(row => row.statusPreenchimento === filters.status);
