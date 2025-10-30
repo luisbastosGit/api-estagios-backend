@@ -241,8 +241,7 @@ app.post('/student-data', authenticateToken, async (req, res) => {
     if (filters.nome) filteredData = filteredData.filter(row => row['nome-completo'] && row['nome-completo'].toLowerCase().includes(filters.nome.toLowerCase()));
     if (filters.ano) filteredData = filteredData.filter(row => row.matricula && row.matricula.startsWith(filters.ano));
     if (filters.cpf) filteredData = filteredData.filter(row => row.cpf && row.cpf.replace(/\D/g, '').includes(filters.cpf.replace(/\D/g, '')));
-    if (filters.empresa) filteredData = filteredData.filter(row => row['nome-concedente'] && row['nome-concedente'].toLowerCase().includes(filters.empresa.toLowerCase()));
-    const stats = {
+   
         total: filteredData.length,
         completos: filteredData.filter(row => row.statusPreenchimento && row.statusPreenchimento.trim().toUpperCase() === 'CONCLUÍDO').length,
         pendentes: filteredData.filter(row => row.statusPreenchimento && row.statusPreenchimento.trim().toUpperCase() === 'ALUNO').length
