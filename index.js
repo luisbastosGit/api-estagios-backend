@@ -211,55 +211,77 @@ app.get('/filter-options', async (req, res) => {
 });
 
 
+/ =================================================================
+// SUBSTITUA A SUA ROTA '/student-data' INTEIRA POR ESTA:
+// =================================================================
+
 app.post('/student-data', authenticateToken, async (req, res) => {
-  console.log(`Usuário '${req.user.nome}' está a procurar dados de alunos...`);
-  try {
-    const filters = req.body;
-    const { googleSheets } = await getAuth();
+  console.log(`Usuário '${req.user.nome}' está a procurar dados de alunos...`);
+  try {
+    const filters = req.body;
+    const { googleSheets } = await getAuth();
+    
+    const studentSheet = await googleSheets.spreadsheets.values.get({
+        spreadsheetId: SPREADSHEET_ID,
+        range: 'Página1',
+    });
+
+    const rows = studentSheet.data.values || [];
+    const headers = rows.shift();
     
-    const studentSheet = await googleSheets.spreadsheets.values.get({
-        spreadsheetId: SPREADSHEET_ID,
-        range: 'Página1',
-    });
+    // --- INÍCIO DO DEBUG ---
+    console.log('CABEÇALHOS REAIS DA PLANILHA:', headers);
+    // --- FIM DO DEBUG ---
+    
+    let allData = rows.map(row => {
+        const rowObj = {};
+        headers.forEach((header, index) => {
+            // Evita erros se uma linha for mais curta que os cabeçalhos
+            rowObj[header] = row[index] || null; 
+        });
+        return rowObj;
+    });
 
-    const rows = studentSheet.data.values || [];
-    const headers = rows.shift();
-    console.log('CABEÇALHOS REAIS DA PLANILHA:', headers);
+    // --- INÍCIO DO DEBUG ---
+    console.log('FILTRO DE EMPRESA RECEBIDO:', filters.empresa);
+    if (allData.length > 0) {
+        // Log seguro, converte para String para evitar crash
+        console.log('VALOR DA COLUNA NA 1ª LINHA:', String(allData[0]['nome-concedente'] || 'VAZIO'));
+    }
+    // --- FIM DO DEBUG ---
+
+    let filteredData = allData;
     
-    let allData = rows.map(row => {
-        const rowObj = {};
-        headers.forEach((header, index) => {
-            rowObj[header] = row[index];
-        });
-        return rowObj;
-    });
-    console.log('FILTRO DE EMPRESA RECEBIDO:', filters.empresa);
-    if (allData.length > 0) {
-        console.log('VALOR DA COLUNA NA 1ª LINHA:', String(allData[0]['nome-concedente'] || ''));
-    }
+    // --- APLICAÇÃO DOS FILTROS ---
+    if (filters.status) filteredData = filteredData.filter(row => row.statusPreenchimento === filters.status);
+    if (filters.curso) filteredData = filteredData.filter(row => row.curso === filters.curso);
+    if (filters.orientador) filteredData = filteredData.filter(row => row['nome-orientador'] === filters.orientador);
+    if (filters.turma) filteredData = filteredData.filter(row => row['turma-fase'] === filters.turma);
+    
+    // Filtros de texto "seguros" (com String() e toLowerCase())
+    if (filters.nome) filteredData = filteredData.filter(row => String(row['nome-completo'] || '').toLowerCase().includes(filters.nome.toLowerCase()));
+    if (filters.ano) filteredData = filteredData.filter(row => String(row.matricula || '').startsWith(filters.ano));
+    if (filters.cpf) filteredData = filteredData.filter(row => String(row.cpf || '').replace(/\D/g, '').includes(filters.cpf.replace(/\D/g, '')));
+    
+    // 👇 O SEU NOVO FILTRO (VERSÃO SUPER-SEGURA) 👇
+    if (filters.empresa) filteredData = filteredData.filter(row => String(row['nome-concedente'] || '').toLowerCase().includes(filters.empresa.toLowerCase()));
+    
+    // --- FIM DOS FILTROS ---
 
-    let filteredData = allData;
-    if (filters.status) filteredData = filteredData.filter(row => row.statusPreenchimento === filters.status);
-    if (filters.curso) filteredData = filteredData.filter(row => row.curso === filters.curso);
-    if (filters.orientador) filteredData = filteredData.filter(row => row['nome-orientador'] === filters.orientador);
-    if (filters.turma) filteredData = filteredData.filter(row => row['turma-fase'] === filters.turma);
-    if (filters.nome) filteredData = filteredData.filter(row => row['nome-completo'] && row['nome-completo'].toLowerCase().includes(filters.nome.toLowerCase()));
-    if (filters.ano) filteredData = filteredData.filter(row => row.matricula && row.matricula.startsWith(filters.ano));
-    if (filters.cpf) filteredData = filteredData.filter(row => row.cpf && row.cpf.replace(/\D/g, '').includes(filters.cpf.replace(/\D/g, '')));
-    if (filters.empresa) filteredData = filteredData.filter(row => String(row['nome-concedente'] || '').toLowerCase().includes(filters.empresa.toLowerCase()));
-    const stats = {
-        total: filteredData.length,
-        completos: filteredData.filter(row => row.statusPreenchimento && row.statusPreenchimento.trim().toUpperCase() === 'CONCLUÍDO').length,
-        pendentes: filteredData.filter(row => row.statusPreenchimento && row.statusPreenchimento.trim().toUpperCase() === 'ALUNO').length
-    };
+    const stats = {
+        total: filteredData.length,
+        completos: filteredData.filter(row => row.statusPreenchimento && row.statusPreenchimento.trim().toUpperCase() === 'CONCLUÍDO').length,
+        pendentes: filteredData.filter(row => row.statusPreenchimento && row.statusPreenchimento.trim().toUpperCase() === 'ALUNO').length
+    };
 
-    console.log(`Encontrados ${stats.total} registos.`);
-    res.json({ success: true, data: filteredData, stats: stats });
+    console.log(`Encontrados ${stats.total} registos.`);
+    res.json({ success: true, data: filteredData, stats: stats });
 
-  } catch (error) {
-      console.error('ERRO AO PROCURAR DADOS DOS ALUNOS:', error);
-      res.status(500).json({ success: false, message: 'Ocorreu um erro no servidor ao procurar dados.' });
-  }
+  } catch (error) {
+    // Log de erro MUITO importante
+      console.error('ERRO DETALHADO AO PROCURAR DADOS:', error);
+      res.status(500).json({ success: false, message: 'Ocorreu um erro no servidor ao procurar dados.' });
+  }
 });
 
 app.post('/update-grades', authenticateToken, async (req, res) => {
